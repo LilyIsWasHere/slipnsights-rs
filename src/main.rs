@@ -17,7 +17,7 @@ fn main() {
             peppi::model::primitives::Port::P3 => 3,
             peppi::model::primitives::Port::P4 => 4,
         };
-        let player = Player::new(port)
+        let player = Player::new(port);
     }
 
 
