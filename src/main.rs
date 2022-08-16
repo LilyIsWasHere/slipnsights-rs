@@ -8,7 +8,6 @@ fn main() {
     let game = peppi::game(&mut buf, None, None).unwrap();
     let frames_enum = game.frames;
 
-    let players: Vec<Player> = Vec::new();
 
     for player in game.metadata.players.unwrap().iter() {
         let port = match player.port {
@@ -17,7 +16,6 @@ fn main() {
             peppi::model::primitives::Port::P3 => 3,
             peppi::model::primitives::Port::P4 => 4,
         };
-        let player = Player::new(port);
     }
 
 
