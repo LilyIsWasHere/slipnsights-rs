@@ -1,14 +1,17 @@
-use peppi::model::enums::action_state::{State, Common};
+use core::fmt::{self, Display};
+use std::time::Instant;
+use frameinfo::{get_attack_string, PlayerFrame};
+use peppi::model::enums::action_state::{Common, State};
 use peppi::model::enums::attack::Attack;
 use peppi::model::frame::{Data, Frame, PortData};
-use frameinfo::PlayerFrame;
-use core::fmt::{self, Display};
+use std::fmt::Debug;
 use std::prelude::*;
 use std::{fs, io};
 
 pub mod frameinfo;
 
 fn main() {
+    let init_time = Instant::now();
     let mut buf = io::BufReader::new(fs::File::open("replays/game.slp").unwrap());
     let game = peppi::game(&mut buf, None, None).unwrap();
     let frames_enum = game.frames;
@@ -28,34 +31,38 @@ fn main() {
         peppi::model::game::Frames::P3(f) => handle_frames_enum(f),
         peppi::model::game::Frames::P4(f) => handle_frames_enum(f),
     }
+    let end_time = init_time.elapsed();
+    println!("{:#?}", end_time);
+
 }
 
 fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
     let mut conversions: Vec<Conversion> = Vec::new();
     let mut active_conversions: [Option<Conversion>; N] = [(); N].map(|_| None);
     for (i, frame) in frames.iter().enumerate() {
-        let prev_frame = if i > 0 {&frames[i - 1]} else {frame};
+        let prev_frame = if i > 0 { &frames[i - 1] } else { frame };
         for port in 0..N {
-
             match &mut active_conversions[port] {
                 Some(active_conversion) => {
                     let player_frame = &frame.ports[port];
 
                     active_conversion.frames_since_last_hit += 1;
-                    active_conversion.has_been_grounded_actionable = active_conversion.has_been_grounded_actionable || player_frame.is_grounded_actionable();
+                    active_conversion.has_been_grounded_actionable = active_conversion
+                        .has_been_grounded_actionable
+                        || player_frame.is_grounded_actionable();
 
                     let mut conversion_complete = false;
 
-                    if active_conversion.frames_since_last_hit > 45 && active_conversion.has_been_grounded_actionable {
+                    if active_conversion.frames_since_last_hit > 45
+                        && active_conversion.has_been_grounded_actionable
+                    {
                         conversion_complete = true;
-                    }
-                    else if player_frame.did_lose_stock(&prev_frame.ports[port]) {
+                    } else if player_frame.did_lose_stock(&prev_frame.ports[port]) {
                         conversion_complete = true;
-                    }
-                    else {
+                    } else {
                         let is_damaged = player_frame.is_damaged();
                         let is_grabbed = player_frame.is_grabbed();
-                        let is_command_grabbed = player_frame.is_command_grabbed();    
+                        let is_command_grabbed = player_frame.is_command_grabbed();
                         let damage_taken = player_frame.damage_taken(&prev_frame.ports[port]);
 
                         if (is_damaged || is_grabbed || is_command_grabbed) && damage_taken > 0.0 {
@@ -74,7 +81,6 @@ fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
                                 None
                             };
 
-
                             let landed_attack: Option<Attack> = if let Some(adv_i) = adv_index {
                                 frame.ports[adv_i].leader.post.last_attack_landed
                             } else {
@@ -83,9 +89,9 @@ fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
                             let adv_attack: PlayerAttack = PlayerAttack {
                                 player_index: adv_index,
                                 attack: landed_attack,
-                                frame: i
+                                frame: i,
                             };
-    
+
                             active_conversion.add_attack(adv_attack);
 
                             if let Some(adv_i) = adv_index {
@@ -94,7 +100,6 @@ fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
                                 }
                             }
                         }
-
                     }
 
                     if conversion_complete {
@@ -128,9 +133,10 @@ fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
                         let start_frame = i;
                         let start_percent = prev_frame.ports[port].percent();
 
-                        let mut conversion = Conversion::new(adv_index, disadv_index, start_frame, start_percent); 
+                        let mut conversion =
+                            Conversion::new(adv_index, disadv_index, start_frame, start_percent);
 
-                        let landed_attack: Option<Attack> = if let Some(adv_i) = adv_index{
+                        let landed_attack: Option<Attack> = if let Some(adv_i) = adv_index {
                             frame.ports[adv_i].leader.post.last_attack_landed
                         } else {
                             None
@@ -138,7 +144,7 @@ fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
                         let adv_attack: PlayerAttack = PlayerAttack {
                             player_index: adv_index,
                             attack: landed_attack,
-                            frame: i
+                            frame: i,
                         };
 
                         conversion.add_attack(adv_attack);
@@ -149,10 +155,11 @@ fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
         }
     }
 
-    println!("Total conversions: {}", conversions.len());
-    for conversion in conversions {
+    for conversion in &conversions {
+        // println!("{:#?}", conversion) for more detailed output
         println!("{}", conversion);
     }
+    print!("Found {} Conversions in ", conversions.len())
 }
 
 #[derive(Clone, Debug)]
@@ -175,7 +182,12 @@ struct Conversion {
 }
 
 impl Conversion {
-    fn new(adv_index: Option<usize>, disadv_index: usize, start_frame: usize, start_percent: f32) -> Conversion {
+    fn new(
+        adv_index: Option<usize>,
+        disadv_index: usize,
+        start_frame: usize,
+        start_percent: f32,
+    ) -> Conversion {
         Conversion {
             adv_index,
             disadv_index,
@@ -196,24 +208,26 @@ impl Conversion {
         self.frames_since_last_hit = 0;
         self.has_been_grounded_actionable = false;
     }
-
 }
 impl Display for Conversion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let adv_player = match self.adv_index {
-            Some(i) => format!("{}", i+1),
+            Some(i) => format!("{}", i + 1),
             None => "Unknown".to_string(),
         };
 
-        let attacks_vec = self.attacks.iter().map(|a| {
-            format!("{}", a)
-        }).collect::<Vec<String>>().join(", ");
+        let attacks_vec = self
+            .attacks
+            .iter()
+            .map(|a| format!("{}", a))
+            .collect::<Vec<String>>()
+            .join(", ");
 
-        write!(f, "Conversion: Player {} hit Player {}!\n   They dealt {:.2} damage in {} hits.\n   Attacks: {}", adv_player, self.disadv_index+1, self.end_percent.unwrap() - self.start_percent, self.attacks.len(), attacks_vec)
+        write!(f, "Conversion! Player {} hit Player {}!\n   Frames: {} - {}\n   They dealt {:.2} damage in {} hits.\n   Attacks: {}", adv_player, self.disadv_index+1, self.start_frame, self.end_frame.unwrap_or(0), self.end_percent.unwrap() - self.start_percent, self.attacks.len(), attacks_vec)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 struct PlayerAttack {
     player_index: Option<usize>,
     attack: Option<Attack>,
@@ -222,23 +236,19 @@ struct PlayerAttack {
 
 impl Display for PlayerAttack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let attack_number = if let Some(a) = self.attack { a.0 } else { 0 };
 
         let player = match self.player_index {
             Some(i) => format!("{}", i),
             None => "Unknown".to_string(),
         };
-        let attack = match self.attack {
-            Some(a) => {
-                get_attack_string(a)
-            }
+        let attack_string = match self.attack {
+            Some(a) => get_attack_string(a),
             None => "Unknown".to_string(),
         };
-        write!(f, "{} on frame {}", attack, self.frame)
+        write!(f, "{} ({})", attack_number, attack_string)
     }
 }
-
-
-
 
 impl PlayerFrame for PortData {
     fn is_damaged(&self) -> bool {
@@ -376,101 +386,5 @@ impl PlayerFrame for PortData {
             State::YoungLink(state) => state.0,
             State::Zelda(state) => state.0,
         }
-    }
-}
-
-fn get_attack_string(attack: Attack) -> String {
-    match attack {
-        Attack::NON_STALING => "NON_STALING".to_string(),
-        Attack::JAB_1 => "JAB_1".to_string(),
-        Attack::JAB_2 => "JAB_2".to_string(),
-        Attack::JAB_3 => "JAB_3".to_string(),
-        Attack::RAPID_JABS => "RAPID_JABS".to_string(),
-        Attack::DASH_ATTACK => "DASH_ATTACK".to_string(),
-        Attack::SIDE_TILT => "SIDE_TILT".to_string(),
-        Attack::UP_TILT => "UP_TILT".to_string(),
-        Attack::DOWN_TILT => "DOWN_TILT".to_string(),
-        Attack::SIDE_SMASH => "SIDE_SMASH".to_string(),
-        Attack::UP_SMASH => "UP_SMASH".to_string(),
-        Attack::DOWN_SMASH => "DOWN_SMASH".to_string(),
-        Attack::NAIR => "NAIR".to_string(),
-        Attack::FAIR => "FAIR".to_string(),
-        Attack::BAIR => "BAIR".to_string(),
-        Attack::UAIR => "UAIR".to_string(),
-        Attack::DAIR => "DAIR".to_string(),
-        Attack::NEUTRAL_SPECIAL => "NEUTRAL_SPECIAL".to_string(),
-        Attack::SIDE_SPECIAL => "SIDE_SPECIAL".to_string(),
-        Attack::UP_SPECIAL => "UP_SPECIAL".to_string(),
-        Attack::DOWN_SPECIAL => "DOWN_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_MARIO_NEUTRAL_SPECIAL => "KIRBY_HAT_MARIO_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_FOX_NEUTRAL_SPECIAL => "KIRBY_HAT_FOX_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_CFALCON_NEUTRAL_SPECIAL => "KIRBY_HAT_CFALCON_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_DKNEUTRAL_SPECIAL => "KIRBY_HAT_DKNEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_BOWSER_NEUTRAL_SPECIAL => "KIRBY_HAT_BOWSER_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_LINK_NEUTRAL_SPECIAL => "KIRBY_HAT_LINK_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_SHEIK_NEUTRAL_SPECIAL => "KIRBY_HAT_SHEIK_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_NESS_NEUTRAL_SPECIAL => "KIRBY_HAT_NESS_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_PEACH_NEUTRAL_SPECIAL => "KIRBY_HAT_PEACH_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_ICE_CLIMBER_NEUTRAL_SPECIAL => "KIRBY_HAT_ICE_CLIMBER_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_PIKACHU_NEUTRAL_SPECIAL => "KIRBY_HAT_PIKACHU_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_SAMUS_NEUTRAL_SPECIAL => "KIRBY_HAT_SAMUS_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_YOSHI_NEUTRAL_SPECIAL => "KIRBY_HAT_YOSHI_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_JIGGLYPUFF_NEUTRAL_SPECIAL => "KIRBY_HAT_JIGGLYPUFF_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_MEWTWO_NEUTRAL_SPECIAL => "KIRBY_HAT_MEWTWO_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_LUIGI_NEUTRAL_SPECIAL => "KIRBY_HAT_LUIGI_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_MARTH_NEUTRAL_SPECIAL => "KIRBY_HAT_MARTH_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_ZELDA_NEUTRAL_SPECIAL => "KIRBY_HAT_ZELDA_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_YOUNG_LINK_NEUTRAL_SPECIAL => "KIRBY_HAT_YOUNG_LINK_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_DOC_NEUTRAL_SPECIAL => "KIRBY_HAT_DOC_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_FALCO_NEUTRAL_SPECIAL => "KIRBY_HAT_FALCO_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_PICHU_NEUTRAL_SPECIAL => "KIRBY_HAT_PICHU_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_GAME_AND_WATCH_NEUTRAL_SPECIAL => "KIRBY_HAT_GAME_AND_WATCH_NEUTRAL_SPECIAL".to_string(),   
-        Attack::KIRBY_HAT_GANON_NEUTRAL_SPECIAL => "KIRBY_HAT_GANON_NEUTRAL_SPECIAL".to_string(),
-        Attack::KIRBY_HAT_ROY_NEUTRAL_SPECIAL => "KIRBY_HAT_ROY_NEUTRAL_SPECIAL".to_string(),
-        Attack::GET_UP_ATTACK_FROM_BACK => "GET_UP_ATTACK_FROM_BACK".to_string(),
-        Attack::GET_UP_ATTACK_FROM_FRONT => "GET_UP_ATTACK_FROM_FRONT".to_string(),
-        Attack::PUMMEL => "PUMMEL".to_string(),
-        Attack::FORWARD_THROW => "FORWARD_THROW".to_string(),
-        Attack::BACK_THROW => "BACK_THROW".to_string(),
-        Attack::UP_THROW => "UP_THROW".to_string(),
-        Attack::DOWN_THROW => "DOWN_THROW".to_string(),
-        Attack::CARGO_FORWARD_THROW => "CARGO_FORWARD_THROW".to_string(),
-        Attack::CARGO_BACK_THROW => "CARGO_BACK_THROW".to_string(),
-        Attack::CARGO_UP_THROW => "CARGO_UP_THROW".to_string(),
-        Attack::CARGO_DOWN_THROW => "CARGO_DOWN_THROW".to_string(),
-        Attack::LEDGE_GET_UP_ATTACK_100 => "LEDGE_GET_UP_ATTACK_100".to_string(),
-        Attack::LEDGE_GET_UP_ATTACK => "LEDGE_GET_UP_ATTACK_101".to_string(),
-        Attack::BEAM_SWORD_JAB => "BEAM_SWORD_JAB".to_string(),
-        Attack::BEAM_SWORD_TILT_SWING => "BEAM_SWORD_TILT_SWING".to_string(),
-        Attack::BEAM_SWORD_SMASH_SWING => "BEAM_SWORD_SMASH_SWING".to_string(),
-        Attack::BEAM_SWORD_DASH_SWING => "BEAM_SWORD_DASH_SWING".to_string(),
-        Attack::HOME_RUN_BAT_JAB => "HOME_RUN_BAT_JAB".to_string(),
-        Attack::HOME_RUN_BAT_TILT_SWING => "HOME_RUN_BAT_TILT_SWING".to_string(),
-        Attack::HOME_RUN_BAT_SMASH_SWING => "HOME_RUN_BAT_SMASH_SWING".to_string(),
-        Attack::HOME_RUN_BAT_DASH_SWING => "HOME_RUN_BAT_DASH_SWING".to_string(),
-        Attack::PARASOL_JAB => "PARASOL_JAB".to_string(),
-        Attack::PARASOL_TILT_SWING => "PARASOL_TILT_SWING".to_string(),
-        Attack::PARASOL_SMASH_SWING => "PARASOL_SMASH_SWING".to_string(),
-        Attack::PARASOL_DASH_SWING => "PARASOL_DASH_SWING".to_string(),
-        Attack::FAN_JAB => "FAN_JAB".to_string(),
-        Attack::FAN_TILT_SWING => "FAN_TILT_SWING".to_string(),
-        Attack::FAN_SMASH_SWING => "FAN_SMASH_SWING".to_string(),
-        Attack::FAN_DASH_SWING => "FAN_DASH_SWING".to_string(),
-        Attack::STAR_ROD_JAB => "STAR_ROD_JAB".to_string(),
-        Attack::STAR_ROD_TILT_SWING => "STAR_ROD_TILT_SWING".to_string(),
-        Attack::STAR_ROD_SMASH_SWING => "STAR_ROD_SMASH_SWING".to_string(),
-        Attack::STAR_ROD_DASH_SWING => "STAR_ROD_DASH_SWING".to_string(),
-        Attack::LIPS_STICK_JAB => "LIPS_STICK_JAB".to_string(),
-        Attack::LIPS_STICK_TILT_SWING => "LIPS_STICK_TILT_SWING".to_string(),
-        Attack::LIPS_STICK_SMASH_SWING => "LIPS_STICK_SMASH_SWING".to_string(),
-        Attack::LIPS_STICK_DASH_SWING => "LIPS_STICK_DASH_SWING".to_string(),
-        Attack::OPEN_PARASOL => "OPEN_PARASOL".to_string(),
-        Attack::RAY_GUN_SHOOT => "RAY_GUN_SHOOT".to_string(),
-        Attack::FIRE_FLOWER_SHOOT => "FIRE_FLOWER_SHOOT".to_string(),
-        Attack::SCREW_ATTACK => "SCREW_ATTACK".to_string(),
-        Attack::SUPER_SCOPE_RAPID => "SUPER_SCOPE_RAPID".to_string(),
-        Attack::SUPER_SCOPE_CHARGED => "SUPER_SCOPE_CHARGED".to_string(),
-        Attack::HAMMER => "HAMMER".to_string(),
-        _ => "UNNNAMED(".to_string() + &(attack.0 as u32).to_string() + ")",
     }
 }
