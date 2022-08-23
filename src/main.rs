@@ -3,9 +3,8 @@ use std::time::Instant;
 use frameinfo::{get_attack_string, PlayerFrame};
 use peppi::model::enums::action_state::{Common, State};
 use peppi::model::enums::attack::Attack;
-use peppi::model::frame::{Data, Frame, PortData};
+use peppi::model::frame::{Frame, PortData};
 use std::fmt::Debug;
-use std::prelude::*;
 use std::{fs, io};
 
 pub mod frameinfo;
@@ -16,14 +15,14 @@ fn main() {
     let game = peppi::game(&mut buf, None, None).unwrap();
     let frames_enum = game.frames;
 
-    for player in game.metadata.players.unwrap().iter() {
-        let port = match player.port {
-            peppi::model::primitives::Port::P1 => 1,
-            peppi::model::primitives::Port::P2 => 2,
-            peppi::model::primitives::Port::P3 => 3,
-            peppi::model::primitives::Port::P4 => 4,
-        };
-    }
+    // for player in game.metadata.players.unwrap().iter() {
+    //     let port = match player.port {
+    //         peppi::model::primitives::Port::P1 => 1,
+    //         peppi::model::primitives::Port::P2 => 2,
+    //         peppi::model::primitives::Port::P3 => 3,
+    //         peppi::model::primitives::Port::P4 => 4,
+    //     };
+    // }
 
     match frames_enum {
         peppi::model::game::Frames::P1(f) => handle_frames_enum(f),
@@ -159,7 +158,7 @@ fn handle_frames_enum<const N: usize>(frames: Vec<Frame<N>>) {
         // println!("{:#?}", conversion) for more detailed output
         println!("{}", conversion);
     }
-    print!("Found {} Conversions in ", conversions.len())
+    print!("\nFound {} Conversions in ", conversions.len())
 }
 
 #[derive(Clone, Debug)]
